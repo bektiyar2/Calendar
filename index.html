@@ -1,584 +1,579 @@
-import React, { useState, useEffect } from 'react';
-import { Calendar, Users, Bell, Trash2, Plus, Clock, Edit, X } from 'lucide-react';
-
-const WednesdayBookingCalendar = () => {
-  const [bookings, setBookings] = useState([]);
-  const [participants, setParticipants] = useState([
-    { id: 1, name: 'Участник 1', phone: '+7 900 000-00-01' },
-    { id: 2, name: 'Участник 2', phone: '+7 900 000-00-02' },
-    { id: 3, name: 'Участник 3', phone: '+7 900 000-00-03' },
-    { id: 4, name: 'Участник 4', phone: '+7 900 000-00-04' },
-    { id: 5, name: 'Участник 5', phone: '+7 900 000-00-05' },
-    { id: 6, name: 'Участник 6', phone: '+7 900 000-00-06' },
-    { id: 7, name: 'Участник 7', phone: '+7 900 000-00-07' },
-    { id: 8, name: 'Участник 8', phone: '+7 900 000-00-08' },
-    { id: 9, name: 'Участник 9', phone: '+7 900 000-00-09' },
-    { id: 10, name: 'Участник 10', phone: '+7 900 000-00-10' },
-    { id: 11, name: 'Участник 11', phone: '+7 900 000-00-11' },
-    { id: 12, name: 'Участник 12', phone: '+7 900 000-00-12' },
-    { id: 13, name: 'Участник 13', phone: '+7 900 000-00-13' },
-    { id: 14, name: 'Участник 14', phone: '+7 900 000-00-14' },
-    { id: 15, name: 'Участник 15', phone: '+7 900 000-00-15' },
-  ]);
-  const [loading, setLoading] = useState(true);
-  const [selectedDate, setSelectedDate] = useState(null);
-  const [selectedParticipant, setSelectedParticipant] = useState('');
-  const [showBookingModal, setShowBookingModal] = useState(false);
-  const [showParticipantsModal, setShowParticipantsModal] = useState(false);
-  const [editingParticipant, setEditingParticipant] = useState(null);
-  const [newParticipantName, setNewParticipantName] = useState('');
-  const [newParticipantPhone, setNewParticipantPhone] = useState('');
-
-  // Загрузка данных при старте
-  useEffect(() => {
-    loadData();
-  }, []);
-
-  const loadData = async () => {
-    try {
-      setLoading(true);
-      // Загружаем бронирования
-      const bookingsResult = await window.storage.get('bookings', true);
-      if (bookingsResult) {
-        setBookings(JSON.parse(bookingsResult.value));
-      }
-      
-      // Загружаем участников
-      const participantsResult = await window.storage.get('participants', true);
-      if (participantsResult) {
-        setParticipants(JSON.parse(participantsResult.value));
-      }
-    } catch (error) {
-      console.log('Первый запуск или данные не найдены');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const saveBookings = async (newBookings) => {
-    try {
-      await window.storage.set('bookings', JSON.stringify(newBookings), true);
-      setBookings(newBookings);
-    } catch (error) {
-      console.error('Ошибка сохранения:', error);
-      alert('Ошибка при сохранении. Попробуйте ещё раз.');
-    }
-  };
-
-  const saveParticipants = async (newParticipants) => {
-    try {
-      await window.storage.set('participants', JSON.stringify(newParticipants), true);
-      setParticipants(newParticipants);
-    } catch (error) {
-      console.error('Ошибка сохранения участников:', error);
-    }
-  };
-
-  // Получить все среды на следующий месяц
-  const getWednesdays = () => {
-    const wednesdays = [];
-    const today = new Date();
-    const endDate = new Date(today);
-    endDate.setMonth(endDate.getMonth() + 1);
-
-    let current = new Date(today);
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Календарь бронирования сред</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: system-ui, -apple-system, sans-serif; }
+        .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); align-items: center; justify-content: center; z-index: 50; padding: 1rem; }
+        .modal.active { display: flex; }
+        .spin { animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+    </style>
+</head>
+<body class="bg-gradient-to-br from-blue-50 to-indigo-100 min-h-screen">
     
-    // Найти первую среду
-    while (current.getDay() !== 3) {
-      current.setDate(current.getDate() + 1);
-    }
-
-    // Собрать все среды до конца периода
-    while (current <= endDate) {
-      wednesdays.push(new Date(current));
-      current.setDate(current.getDate() + 7);
-    }
-
-    return wednesdays;
-  };
-
-  const formatDate = (date) => {
-    return date.toLocaleDateString('ru-RU', { 
-      day: 'numeric', 
-      month: 'long',
-      year: 'numeric'
-    });
-  };
-
-  const getDateKey = (date) => {
-    return date.toISOString().split('T')[0];
-  };
-
-  const isBooked = (date) => {
-    const dateKey = getDateKey(date);
-    return bookings.find(b => b.date === dateKey);
-  };
-
-  const addBooking = async () => {
-    if (!selectedDate || !selectedParticipant) {
-      alert('Выберите дату и участника');
-      return;
-    }
-
-    const dateKey = getDateKey(selectedDate);
-    const participant = participants.find(p => p.id === parseInt(selectedParticipant));
-    
-    if (isBooked(selectedDate)) {
-      alert('Эта дата уже забронирована');
-      return;
-    }
-
-    const newBooking = {
-      id: Date.now(),
-      date: dateKey,
-      participantId: participant.id,
-      participantName: participant.name,
-      participantPhone: participant.phone,
-      createdAt: new Date().toISOString()
-    };
-
-    await saveBookings([...bookings, newBooking]);
-    setShowBookingModal(false);
-    setSelectedDate(null);
-    setSelectedParticipant('');
-  };
-
-  const deleteBooking = async (bookingId) => {
-    if (confirm('Удалить бронирование?')) {
-      const newBookings = bookings.filter(b => b.id !== bookingId);
-      await saveBookings(newBookings);
-    }
-  };
-
-  const getReminders = () => {
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-    const tomorrowKey = getDateKey(tomorrow);
-
-    return bookings.filter(b => b.date === tomorrowKey);
-  };
-
-  const addParticipant = async () => {
-    if (!newParticipantName.trim() || !newParticipantPhone.trim()) {
-      alert('Заполните имя и телефон');
-      return;
-    }
-
-    const newParticipant = {
-      id: Date.now(),
-      name: newParticipantName.trim(),
-      phone: newParticipantPhone.trim()
-    };
-
-    const newParticipants = [...participants, newParticipant];
-    await saveParticipants(newParticipants);
-    setNewParticipantName('');
-    setNewParticipantPhone('');
-  };
-
-  const updateParticipant = async () => {
-    if (!newParticipantName.trim() || !newParticipantPhone.trim()) {
-      alert('Заполните имя и телефон');
-      return;
-    }
-
-    const newParticipants = participants.map(p => 
-      p.id === editingParticipant.id 
-        ? { ...p, name: newParticipantName.trim(), phone: newParticipantPhone.trim() }
-        : p
-    );
-
-    await saveParticipants(newParticipants);
-    
-    // Обновляем имена в существующих бронированиях
-    const updatedBookings = bookings.map(b => 
-      b.participantId === editingParticipant.id
-        ? { ...b, participantName: newParticipantName.trim(), participantPhone: newParticipantPhone.trim() }
-        : b
-    );
-    await saveBookings(updatedBookings);
-
-    setEditingParticipant(null);
-    setNewParticipantName('');
-    setNewParticipantPhone('');
-  };
-
-  const deleteParticipant = async (participantId) => {
-    const hasBookings = bookings.some(b => b.participantId === participantId);
-    
-    if (hasBookings) {
-      alert('Нельзя удалить участника с активными бронированиями. Сначала удалите его брони.');
-      return;
-    }
-
-    if (confirm('Удалить участника?')) {
-      const newParticipants = participants.filter(p => p.id !== participantId);
-      await saveParticipants(newParticipants);
-    }
-  };
-
-  const startEditParticipant = (participant) => {
-    setEditingParticipant(participant);
-    setNewParticipantName(participant.name);
-    setNewParticipantPhone(participant.phone);
-  };
-
-  const wednesdays = getWednesdays();
-  const reminders = getReminders();
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center">
-        <div className="text-center">
-          <Clock className="w-16 h-16 text-indigo-600 animate-spin mx-auto mb-4" />
-          <p className="text-xl text-gray-700">Загрузка...</p>
+    <!-- Загрузка -->
+    <div id="loading" class="flex items-center justify-center min-h-screen">
+        <div class="text-center">
+            <div class="w-16 h-16 border-4 border-indigo-600 border-t-transparent rounded-full spin mx-auto mb-4"></div>
+            <p class="text-xl text-gray-700">Загрузка...</p>
         </div>
-      </div>
-    );
-  }
-
-  return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
-      <div className="max-w-6xl mx-auto">
-        {/* Заголовок */}
-        <div className="bg-white rounded-2xl shadow-xl p-6 mb-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Calendar className="w-8 h-8 text-indigo-600" />
-              <h1 className="text-3xl font-bold text-gray-800">Календарь бронирования</h1>
-            </div>
-            <div className="text-sm text-gray-500">
-              {participants.length} участников
-            </div>
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-3 gap-6">
-          {/* Календарь */}
-          <div className="md:col-span-2">
-            <div className="bg-white rounded-2xl shadow-xl p-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Calendar className="w-5 h-5" />
-                Среды на месяц вперёд
-              </h2>
-              
-              <div className="space-y-3">
-                {wednesdays.map((wednesday, index) => {
-                  const booking = isBooked(wednesday);
-                  const isPast = wednesday < new Date();
-                  
-                  return (
-                    <div
-                      key={index}
-                      className={`p-4 rounded-xl border-2 transition-all ${
-                        booking
-                          ? 'bg-red-50 border-red-200'
-                          : isPast
-                          ? 'bg-gray-50 border-gray-200 opacity-50'
-                          : 'bg-green-50 border-green-200 hover:border-green-400 cursor-pointer'
-                      }`}
-                      onClick={() => {
-                        if (!booking && !isPast) {
-                          setSelectedDate(wednesday);
-                          setShowBookingModal(true);
-                        }
-                      }}
-                    >
-                      <div className="flex items-center justify-between">
-                        <div>
-                          <p className="font-semibold text-gray-800">
-                            {formatDate(wednesday)}
-                          </p>
-                          {booking ? (
-                            <p className="text-sm text-red-600 mt-1">
-                              Забронировано: {booking.participantName}
-                            </p>
-                          ) : isPast ? (
-                            <p className="text-sm text-gray-500 mt-1">Прошедшая дата</p>
-                          ) : (
-                            <p className="text-sm text-green-600 mt-1">Свободно</p>
-                          )}
-                        </div>
-                        
-                        {booking && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              deleteBooking(booking.id);
-                            }}
-                            className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          {/* Боковая панель */}
-          <div className="space-y-6">
-            {/* Напоминания */}
-            <div className="bg-white rounded-2xl shadow-xl p-6">
-              <h2 className="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-                <Bell className="w-5 h-5" />
-                Напоминания на завтра
-              </h2>
-              
-              {reminders.length > 0 ? (
-                <div className="space-y-3">
-                  <p className="text-sm text-gray-600 mb-3">
-                    Отправьте напоминание этим участникам:
-                  </p>
-                  {reminders.map((reminder) => (
-                    <div key={reminder.id} className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
-                      <p className="font-semibold text-gray-800">{reminder.participantName}</p>
-                      <p className="text-sm text-gray-600">{reminder.participantPhone}</p>
-                      <p className="text-xs text-gray-500 mt-1">
-                        {new Date(reminder.date).toLocaleDateString('ru-RU')}
-                      </p>
-                    </div>
-                  ))}
-                  
-                  <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
-                    <p className="text-sm text-gray-700 font-medium mb-2">Текст для отправки:</p>
-                    <p className="text-sm text-gray-600 italic">
-                      "Напоминаем, что завтра ваша среда! Ждём вас 😊"
-                    </p>
-                  </div>
-                </div>
-              ) : (
-                <p className="text-gray-500 text-sm">На завтра нет бронирований</p>
-              )}
-            </div>
-
-            {/* Участники */}
-            <div className="bg-white rounded-2xl shadow-xl p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-bold text-gray-800 flex items-center gap-2">
-                  <Users className="w-5 h-5" />
-                  Участники
-                </h2>
-                <button
-                  onClick={() => setShowParticipantsModal(true)}
-                  className="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
-                  title="Управление участниками"
-                >
-                  <Edit className="w-4 h-4" />
-                </button>
-              </div>
-              
-              <div className="space-y-2 max-h-64 overflow-y-auto">
-                {participants.map((participant) => {
-                  const bookingCount = bookings.filter(b => b.participantId === participant.id).length;
-                  return (
-                    <div key={participant.id} className="p-2 hover:bg-gray-50 rounded-lg">
-                      <p className="text-sm font-medium text-gray-800">{participant.name}</p>
-                      <p className="text-xs text-gray-500">{participant.phone}</p>
-                      <p className="text-xs text-indigo-600 mt-1">
-                        Броней: {bookingCount}
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Модальное окно бронирования */}
-        {showBookingModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
-              <h3 className="text-2xl font-bold text-gray-800 mb-4">
-                Забронировать дату
-              </h3>
-              
-              <div className="mb-4">
-                <p className="text-gray-600 mb-2">Дата:</p>
-                <p className="text-lg font-semibold text-indigo-600">
-                  {selectedDate && formatDate(selectedDate)}
-                </p>
-              </div>
-
-              <div className="mb-6">
-                <label className="block text-gray-700 mb-2 font-medium">
-                  Выберите участника:
-                </label>
-                <select
-                  value={selectedParticipant}
-                  onChange={(e) => setSelectedParticipant(e.target.value)}
-                  className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
-                >
-                  <option value="">-- Выберите --</option>
-                  {participants.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="flex gap-3">
-                <button
-                  onClick={addBooking}
-                  className="flex-1 bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-                >
-                  <Plus className="w-5 h-5" />
-                  Забронировать
-                </button>
-                <button
-                  onClick={() => {
-                    setShowBookingModal(false);
-                    setSelectedDate(null);
-                    setSelectedParticipant('');
-                  }}
-                  className="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-                >
-                  Отмена
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Модальное окно управления участниками */}
-        {showParticipantsModal && (
-          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 overflow-y-auto">
-            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-2xl w-full my-8">
-              <div className="flex items-center justify-between mb-6">
-                <h3 className="text-2xl font-bold text-gray-800 flex items-center gap-2">
-                  <Users className="w-6 h-6" />
-                  Управление участниками
-                </h3>
-                <button
-                  onClick={() => {
-                    setShowParticipantsModal(false);
-                    setEditingParticipant(null);
-                    setNewParticipantName('');
-                    setNewParticipantPhone('');
-                  }}
-                  className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <X className="w-6 h-6 text-gray-600" />
-                </button>
-              </div>
-
-              {/* Форма добавления/редактирования */}
-              <div className="bg-indigo-50 rounded-xl p-4 mb-6">
-                <h4 className="font-semibold text-gray-800 mb-3">
-                  {editingParticipant ? 'Редактировать участника' : 'Добавить нового участника'}
-                </h4>
-                <div className="space-y-3">
-                  <input
-                    type="text"
-                    placeholder="Имя участника"
-                    value={newParticipantName}
-                    onChange={(e) => setNewParticipantName(e.target.value)}
-                    className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
-                  />
-                  <input
-                    type="tel"
-                    placeholder="Телефон (например, +7 900 000-00-00)"
-                    value={newParticipantPhone}
-                    onChange={(e) => setNewParticipantPhone(e.target.value)}
-                    className="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none"
-                  />
-                  <div className="flex gap-2">
-                    {editingParticipant ? (
-                      <>
-                        <button
-                          onClick={updateParticipant}
-                          className="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors"
-                        >
-                          Сохранить изменения
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingParticipant(null);
-                            setNewParticipantName('');
-                            setNewParticipantPhone('');
-                          }}
-                          className="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-                        >
-                          Отмена
-                        </button>
-                      </>
-                    ) : (
-                      <button
-                        onClick={addParticipant}
-                        className="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2"
-                      >
-                        <Plus className="w-5 h-5" />
-                        Добавить участника
-                      </button>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Список участников */}
-              <div className="space-y-2 max-h-96 overflow-y-auto">
-                <h4 className="font-semibold text-gray-800 mb-2">
-                  Список участников ({participants.length})
-                </h4>
-                {participants.map((participant) => {
-                  const bookingCount = bookings.filter(b => b.participantId === participant.id).length;
-                  return (
-                    <div
-                      key={participant.id}
-                      className="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
-                    >
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-800">{participant.name}</p>
-                        <p className="text-sm text-gray-600">{participant.phone}</p>
-                        <p className="text-xs text-indigo-600 mt-1">
-                          Активных броней: {bookingCount}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <button
-                          onClick={() => startEditParticipant(participant)}
-                          className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
-                          title="Редактировать"
-                        >
-                          <Edit className="w-5 h-5" />
-                        </button>
-                        <button
-                          onClick={() => deleteParticipant(participant.id)}
-                          className="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors"
-                          title="Удалить"
-                        >
-                          <Trash2 className="w-5 h-5" />
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-
-              <div className="mt-6">
-                <button
-                  onClick={() => {
-                    setShowParticipantsModal(false);
-                    setEditingParticipant(null);
-                    setNewParticipantName('');
-                    setNewParticipantPhone('');
-                  }}
-                  className="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors"
-                >
-                  Закрыть
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
     </div>
-  );
-};
 
-export default WednesdayBookingCalendar;
+    <!-- Основное приложение -->
+    <div id="app" class="p-4 md:p-8" style="display: none;">
+        <div class="max-w-6xl mx-auto">
+            
+            <!-- Заголовок -->
+            <div class="bg-white rounded-2xl shadow-xl p-6 mb-6">
+                <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                        <svg class="w-8 h-8 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                        </svg>
+                        <h1 class="text-3xl font-bold text-gray-800">Календарь бронирования</h1>
+                    </div>
+                    <div class="text-sm text-gray-500">
+                        <span id="participantCount">0</span> участников
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid md:grid-cols-3 gap-6">
+                
+                <!-- Календарь -->
+                <div class="md:col-span-2">
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path>
+                            </svg>
+                            Среды на месяц вперёд
+                        </h2>
+                        <div id="calendar" class="space-y-3"></div>
+                    </div>
+                </div>
+
+                <!-- Боковая панель -->
+                <div class="space-y-6">
+                    
+                    <!-- Напоминания -->
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <h2 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
+                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"></path>
+                            </svg>
+                            Напоминания на завтра
+                        </h2>
+                        <div id="reminders"></div>
+                    </div>
+
+                    <!-- Участники -->
+                    <div class="bg-white rounded-2xl shadow-xl p-6">
+                        <div class="flex items-center justify-between mb-4">
+                            <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                                </svg>
+                                Участники
+                            </h2>
+                            <button onclick="openParticipantsModal()" class="p-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors" title="Управление участниками">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                            </button>
+                        </div>
+                        <div id="participantsList" class="space-y-2 max-h-64 overflow-y-auto"></div>
+                    </div>
+                    
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно бронирования -->
+    <div id="bookingModal" class="modal">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-md w-full">
+            <h3 class="text-2xl font-bold text-gray-800 mb-4">Забронировать дату</h3>
+            <div class="mb-4">
+                <p class="text-gray-600 mb-2">Дата:</p>
+                <p id="bookingDate" class="text-lg font-semibold text-indigo-600"></p>
+            </div>
+            <div class="mb-6">
+                <label class="block text-gray-700 mb-2 font-medium">Выберите участника:</label>
+                <select id="participantSelect" class="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none">
+                    <option value="">-- Выберите --</option>
+                </select>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="confirmBooking()" class="flex-1 bg-indigo-600 text-white py-3 rounded-lg font-semibold hover:bg-indigo-700 transition-colors">
+                    Забронировать
+                </button>
+                <button onclick="closeBookingModal()" class="flex-1 bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                    Отмена
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Модальное окно управления участниками -->
+    <div id="participantsModal" class="modal">
+        <div class="bg-white rounded-2xl shadow-2xl p-6 max-w-2xl w-full my-8 max-h-[90vh] overflow-y-auto">
+            <div class="flex items-center justify-between mb-6">
+                <h3 class="text-2xl font-bold text-gray-800 flex items-center gap-2">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                    </svg>
+                    Управление участниками
+                </h3>
+                <button onclick="closeParticipantsModal()" class="p-2 hover:bg-gray-100 rounded-lg transition-colors">
+                    <svg class="w-6 h-6 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <!-- Форма добавления/редактирования -->
+            <div class="bg-indigo-50 rounded-xl p-4 mb-6">
+                <h4 class="font-semibold text-gray-800 mb-3" id="formTitle">Добавить нового участника</h4>
+                <div class="space-y-3">
+                    <input type="text" id="participantName" placeholder="Имя участника" class="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none">
+                    <input type="tel" id="participantPhone" placeholder="Телефон (например, +7 900 000-00-00)" class="w-full p-3 border-2 border-gray-300 rounded-lg focus:border-indigo-500 focus:outline-none">
+                    <div id="formButtons"></div>
+                </div>
+            </div>
+
+            <!-- Список участников -->
+            <div class="space-y-2">
+                <h4 class="font-semibold text-gray-800 mb-2">
+                    Список участников (<span id="totalParticipants">0</span>)
+                </h4>
+                <div id="participantsManageList" class="space-y-2"></div>
+            </div>
+
+            <div class="mt-6">
+                <button onclick="closeParticipantsModal()" class="w-full bg-gray-200 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                    Закрыть
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let bookings = [];
+        let participants = [];
+        let selectedDate = null;
+        let editingParticipant = null;
+
+        // Инициализация
+        async function init() {
+            try {
+                await loadData();
+                renderApp();
+                document.getElementById('loading').style.display = 'none';
+                document.getElementById('app').style.display = 'block';
+            } catch (error) {
+                console.error('Ошибка инициализации:', error);
+                document.getElementById('loading').innerHTML = '<p class="text-red-600">Ошибка загрузки</p>';
+            }
+        }
+
+        // Загрузка данных
+        async function loadData() {
+            try {
+                const bookingsResult = await window.storage.get('bookings', true);
+                if (bookingsResult) {
+                    bookings = JSON.parse(bookingsResult.value);
+                }
+            } catch (error) {
+                console.log('Данные бронирований не найдены');
+            }
+
+            try {
+                const participantsResult = await window.storage.get('participants', true);
+                if (participantsResult) {
+                    participants = JSON.parse(participantsResult.value);
+                } else {
+                    // Инициализация участников по умолчанию
+                    participants = [];
+                    for (let i = 1; i <= 15; i++) {
+                        participants.push({
+                            id: i,
+                            name: `Участник ${i}`,
+                            phone: `+7 900 000-00-${String(i).padStart(2, '0')}`
+                        });
+                    }
+                    await saveParticipants();
+                }
+            } catch (error) {
+                console.log('Инициализация участников');
+                participants = [];
+                for (let i = 1; i <= 15; i++) {
+                    participants.push({
+                        id: i,
+                        name: `Участник ${i}`,
+                        phone: `+7 900 000-00-${String(i).padStart(2, '0')}`
+                    });
+                }
+                await saveParticipants();
+            }
+        }
+
+        // Сохранение данных
+        async function saveBookings() {
+            await window.storage.set('bookings', JSON.stringify(bookings), true);
+        }
+
+        async function saveParticipants() {
+            await window.storage.set('participants', JSON.stringify(participants), true);
+        }
+
+        // Получить среды
+        function getWednesdays() {
+            const wednesdays = [];
+            const today = new Date();
+            const endDate = new Date(today);
+            endDate.setMonth(endDate.getMonth() + 1);
+
+            let current = new Date(today);
+            while (current.getDay() !== 3) {
+                current.setDate(current.getDate() + 1);
+            }
+
+            while (current <= endDate) {
+                wednesdays.push(new Date(current));
+                current.setDate(current.getDate() + 7);
+            }
+
+            return wednesdays;
+        }
+
+        function formatDate(date) {
+            return date.toLocaleDateString('ru-RU', { 
+                day: 'numeric', 
+                month: 'long',
+                year: 'numeric'
+            });
+        }
+
+        function getDateKey(date) {
+            return date.toISOString().split('T')[0];
+        }
+
+        function isBooked(date) {
+            const dateKey = getDateKey(date);
+            return bookings.find(b => b.date === dateKey);
+        }
+
+        // Отрисовка приложения
+        function renderApp() {
+            renderCalendar();
+            renderReminders();
+            renderParticipantsList();
+            document.getElementById('participantCount').textContent = participants.length;
+        }
+
+        function renderCalendar() {
+            const calendar = document.getElementById('calendar');
+            const wednesdays = getWednesdays();
+            const today = new Date();
+
+            calendar.innerHTML = wednesdays.map(wednesday => {
+                const booking = isBooked(wednesday);
+                const isPast = wednesday < today;
+                const dateKey = getDateKey(wednesday);
+
+                let bgClass, borderClass, textClass, clickable;
+                if (booking) {
+                    bgClass = 'bg-red-50';
+                    borderClass = 'border-red-200';
+                    textClass = 'text-red-600';
+                    clickable = '';
+                } else if (isPast) {
+                    bgClass = 'bg-gray-50';
+                    borderClass = 'border-gray-200';
+                    textClass = 'text-gray-500';
+                    clickable = 'opacity-50';
+                } else {
+                    bgClass = 'bg-green-50';
+                    borderClass = 'border-green-200 hover:border-green-400';
+                    textClass = 'text-green-600';
+                    clickable = 'cursor-pointer';
+                }
+
+                return `
+                    <div class="p-4 rounded-xl border-2 transition-all ${bgClass} ${borderClass} ${clickable}"
+                         onclick="${!booking && !isPast ? `openBookingModal('${dateKey}')` : ''}">
+                        <div class="flex items-center justify-between">
+                            <div>
+                                <p class="font-semibold text-gray-800">${formatDate(wednesday)}</p>
+                                ${booking ? `<p class="text-sm ${textClass} mt-1">Забронировано: ${booking.participantName}</p>` : 
+                                   isPast ? `<p class="text-sm ${textClass} mt-1">Прошедшая дата</p>` :
+                                   `<p class="text-sm ${textClass} mt-1">Свободно</p>`}
+                            </div>
+                            ${booking ? `
+                                <button onclick="event.stopPropagation(); deleteBooking(${booking.id})" 
+                                        class="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                    </svg>
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderReminders() {
+            const tomorrow = new Date();
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowKey = getDateKey(tomorrow);
+            const reminders = bookings.filter(b => b.date === tomorrowKey);
+
+            const container = document.getElementById('reminders');
+
+            if (reminders.length > 0) {
+                container.innerHTML = `
+                    <p class="text-sm text-gray-600 mb-3">Отправьте напоминание этим участникам:</p>
+                    ${reminders.map(reminder => `
+                        <div class="p-3 bg-yellow-50 rounded-lg border border-yellow-200 mb-2">
+                            <p class="font-semibold text-gray-800">${reminder.participantName}</p>
+                            <p class="text-sm text-gray-600">${reminder.participantPhone}</p>
+                            <p class="text-xs text-gray-500 mt-1">${new Date(reminder.date).toLocaleDateString('ru-RU')}</p>
+                        </div>
+                    `).join('')}
+                    <div class="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                        <p class="text-sm text-gray-700 font-medium mb-2">Текст для отправки:</p>
+                        <p class="text-sm text-gray-600 italic">"Напоминаем, что завтра ваша среда! Ждём вас 😊"</p>
+                    </div>
+                `;
+            } else {
+                container.innerHTML = '<p class="text-gray-500 text-sm">На завтра нет бронирований</p>';
+            }
+        }
+
+        function renderParticipantsList() {
+            const container = document.getElementById('participantsList');
+            container.innerHTML = participants.map(participant => {
+                const bookingCount = bookings.filter(b => b.participantId === participant.id).length;
+                return `
+                    <div class="p-2 hover:bg-gray-50 rounded-lg">
+                        <p class="text-sm font-medium text-gray-800">${participant.name}</p>
+                        <p class="text-xs text-gray-500">${participant.phone}</p>
+                        <p class="text-xs text-indigo-600 mt-1">Броней: ${bookingCount}</p>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        // Модальное окно бронирования
+        function openBookingModal(dateKey) {
+            selectedDate = dateKey;
+            const date = new Date(dateKey + 'T00:00:00');
+            document.getElementById('bookingDate').textContent = formatDate(date);
+            
+            const select = document.getElementById('participantSelect');
+            select.innerHTML = '<option value="">-- Выберите --</option>' + 
+                participants.map(p => `<option value="${p.id}">${p.name}</option>`).join('');
+            
+            document.getElementById('bookingModal').classList.add('active');
+        }
+
+        function closeBookingModal() {
+            document.getElementById('bookingModal').classList.remove('active');
+            selectedDate = null;
+        }
+
+        async function confirmBooking() {
+            const participantId = parseInt(document.getElementById('participantSelect').value);
+            if (!participantId) {
+                alert('Выберите участника');
+                return;
+            }
+
+            const participant = participants.find(p => p.id === participantId);
+            if (isBooked(new Date(selectedDate + 'T00:00:00'))) {
+                alert('Эта дата уже забронирована');
+                return;
+            }
+
+            const newBooking = {
+                id: Date.now(),
+                date: selectedDate,
+                participantId: participant.id,
+                participantName: participant.name,
+                participantPhone: participant.phone,
+                createdAt: new Date().toISOString()
+            };
+
+            bookings.push(newBooking);
+            await saveBookings();
+            closeBookingModal();
+            renderApp();
+        }
+
+        async function deleteBooking(bookingId) {
+            if (confirm('Удалить бронирование?')) {
+                bookings = bookings.filter(b => b.id !== bookingId);
+                await saveBookings();
+                renderApp();
+            }
+        }
+
+        // Управление участниками
+        function openParticipantsModal() {
+            editingParticipant = null;
+            document.getElementById('participantName').value = '';
+            document.getElementById('participantPhone').value = '';
+            updateParticipantsForm();
+            renderParticipantsManageList();
+            document.getElementById('participantsModal').classList.add('active');
+        }
+
+        function closeParticipantsModal() {
+            document.getElementById('participantsModal').classList.remove('active');
+            editingParticipant = null;
+            renderApp();
+        }
+
+        function updateParticipantsForm() {
+            const formTitle = document.getElementById('formTitle');
+            const formButtons = document.getElementById('formButtons');
+
+            if (editingParticipant) {
+                formTitle.textContent = 'Редактировать участника';
+                formButtons.innerHTML = `
+                    <div class="flex gap-2">
+                        <button onclick="updateParticipant()" class="flex-1 bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors">
+                            Сохранить изменения
+                        </button>
+                        <button onclick="cancelEdit()" class="flex-1 bg-gray-200 text-gray-700 py-2 rounded-lg font-semibold hover:bg-gray-300 transition-colors">
+                            Отмена
+                        </button>
+                    </div>
+                `;
+            } else {
+                formTitle.textContent = 'Добавить нового участника';
+                formButtons.innerHTML = `
+                    <button onclick="addParticipant()" class="w-full bg-indigo-600 text-white py-2 rounded-lg font-semibold hover:bg-indigo-700 transition-colors flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path>
+                        </svg>
+                        Добавить участника
+                    </button>
+                `;
+            }
+        }
+
+        async function addParticipant() {
+            const name = document.getElementById('participantName').value.trim();
+            const phone = document.getElementById('participantPhone').value.trim();
+
+            if (!name || !phone) {
+                alert('Заполните имя и телефон');
+                return;
+            }
+
+            const newParticipant = {
+                id: Date.now(),
+                name: name,
+                phone: phone
+            };
+
+            participants.push(newParticipant);
+            await saveParticipants();
+
+            document.getElementById('participantName').value = '';
+            document.getElementById('participantPhone').value = '';
+            renderParticipantsManageList();
+        }
+
+        function startEditParticipant(participantId) {
+            editingParticipant = participants.find(p => p.id === participantId);
+            document.getElementById('participantName').value = editingParticipant.name;
+            document.getElementById('participantPhone').value = editingParticipant.phone;
+            updateParticipantsForm();
+        }
+
+        async function updateParticipant() {
+            const name = document.getElementById('participantName').value.trim();
+            const phone = document.getElementById('participantPhone').value.trim();
+
+            if (!name || !phone) {
+                alert('Заполните имя и телефон');
+                return;
+            }
+
+            participants = participants.map(p => 
+                p.id === editingParticipant.id 
+                    ? { ...p, name: name, phone: phone }
+                    : p
+            );
+
+            bookings = bookings.map(b => 
+                b.participantId === editingParticipant.id
+                    ? { ...b, participantName: name, participantPhone: phone }
+                    : b
+            );
+
+            await saveParticipants();
+            await saveBookings();
+
+            editingParticipant = null;
+            document.getElementById('participantName').value = '';
+            document.getElementById('participantPhone').value = '';
+            updateParticipantsForm();
+            renderParticipantsManageList();
+        }
+
+        function cancelEdit() {
+            editingParticipant = null;
+            document.getElementById('participantName').value = '';
+            document.getElementById('participantPhone').value = '';
+            updateParticipantsForm();
+        }
+
+        async function deleteParticipant(participantId) {
+            const hasBookings = bookings.some(b => b.participantId === participantId);
+
+            if (hasBookings) {
+                alert('Нельзя удалить участника с активными бронированиями. Сначала удалите его брони.');
+                return;
+            }
+
+            if (confirm('Удалить участника?')) {
+                participants = participants.filter(p => p.id !== participantId);
+                await saveParticipants();
+                renderParticipantsManageList();
+            }
+        }
+
+        function renderParticipantsManageList() {
+            const container = document.getElementById('participantsManageList');
+            document.getElementById('totalParticipants').textContent = participants.length;
+
+            container.innerHTML = participants.map(participant => {
+                const bookingCount = bookings.filter(b => b.participantId === participant.id).length;
+                return `
+                    <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                        <div class="flex-1">
+                            <p class="font-medium text-gray-800">${participant.name}</p>
+                            <p class="text-sm text-gray-600">${participant.phone}</p>
+                            <p class="text-xs text-indigo-600 mt-1">Активных броней: ${bookingCount}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="startEditParticipant(${participant.id})" class="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors" title="Редактировать">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+                                </svg>
+                            </button>
+                            <button onclick="deleteParticipant(${participant.id})" class="p-2 text-red-600 hover:bg-red-100 rounded-lg transition-colors" title="Удалить">
+                                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+                                </svg>
+                            </button>
